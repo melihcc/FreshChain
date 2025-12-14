@@ -1,42 +1,71 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <title>FreshChain</title>
-    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-    <style>
-        body { font-family: Arial; margin: 30px; }
-        button { margin: 5px; padding: 6px 12px; }
-        input { margin: 5px; }
-        .box { border: 1px solid #ccc; padding: 10px; margin-top: 15px; }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FreshChain</title>
+
+  <!-- ✅ Ethers v5 UMD (GitHub Pages + MetaMask için en stabil) -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 28px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    button { padding: 8px 12px; cursor:pointer; }
+    input, select { padding: 8px; min-width: 240px; }
+    .card { border:1px solid #ddd; border-radius:10px; padding:14px; margin-top:14px; }
+    .muted { color:#666; font-size: 13px; }
+    pre { white-space: pre-wrap; background:#f7f7f7; padding:10px; border-radius:8px; overflow:auto; }
+    .ok { color: #0a7a0a; font-weight: 600; }
+    .err { color: #b00020; font-weight: 600; }
+  </style>
 </head>
+
 <body>
+  <h2>FreshChain – Food Traceability</h2>
 
-<h2>FreshChain – Blockchain Food Traceability</h2>
+  <div class="card">
+    <div class="row">
+      <button id="btnConnect">🔌 MetaMask Connect</button>
+      <button id="btnDisconnect">⛔ Disconnect</button>
+      <span id="net" class="muted"></span>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <div><b>Account:</b> <span id="account" class="muted">Not connected</span></div>
+      <div><b>Status:</b> <span id="status" class="muted">—</span></div>
+    </div>
+    <div class="muted" style="margin-top:10px;">
+      Not: Sepolia’da deploy ettiysen MetaMask ağını Sepolia seç.
+    </div>
+  </div>
 
-<button onclick="connect()">🔌 Connect MetaMask</button>
-<p id="account"></p>
+  <div class="card">
+    <h3>Role Select</h3>
+    <div class="row">
+      <select id="role">
+        <option value="">-- Seç --</option>
+        <option value="admin">Admin</option>
+        <option value="producer">Producer</option>
+        <option value="transporter">Transporter</option>
+        <option value="distributor">Distributor</option>
+        <option value="retailer">Retailer</option>
+        <option value="customer">Customer</option>
+      </select>
+      <button id="btnShow">📌 Menü Göster</button>
+    </div>
 
-<hr>
+    <div id="menu"></div>
+  </div>
 
-<h3>Select Role</h3>
-<select id="role" onchange="showMenu()">
-    <option value="">-- Select --</option>
-    <option value="admin">Admin</option>
-    <option value="producer">Producer</option>
-    <option value="transporter">Transporter</option>
-    <option value="distributor">Distributor</option>
-    <option value="retailer">Retailer</option>
-    <option value="customer">Customer</option>
-</select>
-
-<div id="menu"></div>
+  <div class="card">
+    <h3>Output</h3>
+    <pre id="out">—</pre>
+  </div>
 
 <script>
-let provider, signer, contract;
-
-// 🔴 BURAYI GÜNCELLE
+/* =========================
+   🔴 BURAYI DOLDUR
+   ========================= */
 const CONTRACT_ADDRESS = "0xf4F096e21D38709683bdFe861BC8A198582021bd";
 const ABI = [
 	{
@@ -630,159 +659,372 @@ const ABI = [
 		"stateMutability": "view",
 		"type": "function"
 	}
-];
+];; // Remix ABI JSON'i buraya yapıştır
 
-async function connect() {
-    if (typeof window.ethereum === "undefined") {
-        alert("MetaMask not found");
-        return;
-    }
+/* =========================
+   Global
+   ========================= */
+let provider = null;
+let signer = null;
+let contract = null;
+let currentAccount = null;
 
-    try {
-        provider = new ethers.providers.Web3Provider(window.ethereum);
-        await provider.send("eth_requestAccounts", []);
-        signer = provider.getSigner();
+const outEl = document.getElementById("out");
+const statusEl = document.getElementById("status");
+const accountEl = document.getElementById("account");
+const netEl = document.getElementById("net");
 
-        contract = new ethers.Contract(
-            CONTRACT_ADDRESS,
-            ABI,
-            signer
-        );
-
-        const addr = await signer.getAddress();
-        document.getElementById("account").innerText =
-            "Connected: " + addr;
-
-    } catch (err) {
-        console.error(err);
-        alert("Connection failed");
-    }
+function log(msg, isError=false) {
+  outEl.textContent = msg;
+  statusEl.textContent = isError ? "Error" : "OK";
+  statusEl.className = isError ? "err" : "ok";
 }
 
-
-function showMenu() {
-    const role = document.getElementById("role").value;
-    const menu = document.getElementById("menu");
-    menu.innerHTML = "";
-
-    if (role === "admin") {
-        menu.innerHTML = `
-        <div class="box">
-            <h4>Register Roles</h4>
-            <input id="addr" placeholder="Address">
-            <button onclick="register('producer')">Producer</button>
-            <button onclick="register('transporter')">Transporter</button>
-            <button onclick="register('distributor')">Distributor</button>
-            <button onclick="register('retailer')">Retailer</button>
-        </div>`;
-    }
-
-    if (role === "producer") {
-        menu.innerHTML = `
-        <div class="box">
-            <h4>Create Batch</h4>
-            <input id="bid" placeholder="Batch ID">
-            <input id="pname" placeholder="Product Name">
-            <input id="qty" placeholder="Quantity">
-            <button onclick="createBatch()">Create</button>
-        </div>`;
-    }
-
-    if (role === "transporter") {
-        menu.innerHTML = `
-        <div class="box">
-            <h4>Add Sensor Data</h4>
-            <input id="sbid" placeholder="Batch ID">
-            <input id="temp" placeholder="Temperature">
-            <input id="hum" placeholder="Humidity">
-            <input id="loc" placeholder="Location">
-            <button onclick="addSensor()">Add</button>
-        </div>`;
-    }
-
-    if (role === "distributor") {
-        menu.innerHTML = `
-        <div class="box">
-            <h4>Transfer Ownership</h4>
-            <input id="tbid" placeholder="Batch ID">
-            <input id="newOwner" placeholder="New Owner Address">
-            <button onclick="transfer()">Transfer</button>
-        </div>`;
-    }
-
-    if (role === "retailer") {
-        menu.innerHTML = `
-        <div class="box">
-            <h4>Final Inspection</h4>
-            <input id="rbid" placeholder="Batch ID">
-            <button onclick="arrived(true)">Passed</button>
-            <button onclick="arrived(false)">Failed</button>
-        </div>`;
-    }
-
-    if (role === "customer") {
-        menu.innerHTML = `
-        <div class="box">
-            <h4>View Batch History</h4>
-            <input id="cbid" placeholder="Batch ID">
-            <button onclick="view()">View</button>
-            <pre id="output"></pre>
-        </div>`;
-    }
+function ensureConnected() {
+  if (!window.ethereum) throw new Error("MetaMask bulunamadı (window.ethereum yok).");
+  if (!provider || !signer || !contract) throw new Error("Önce MetaMask Connect yapmalısın.");
 }
 
-// ---- Contract Calls ----
+/* =========================
+   MetaMask Connect
+   ========================= */
+async function connectMM() {
+  if (!window.ethereum) {
+    log("MetaMask bulunamadı. Chrome/Brave + MetaMask kullan.", true);
+    return;
+  }
 
-async function register(type) {
-    const addr = document.getElementById("addr").value;
-    if (type === "producer") await contract.registerProducer(addr);
-    if (type === "transporter") await contract.registerTransporter(addr);
-    if (type === "distributor") await contract.registerDistributor(addr);
-    if (type === "retailer") await contract.registerRetailer(addr);
-    alert("Registered");
+  try {
+    // ✅ v5: Web3Provider
+    provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+
+    // ✅ account iste (pop-up)
+    await provider.send("eth_requestAccounts", []);
+    signer = provider.getSigner();
+
+    currentAccount = await signer.getAddress();
+    accountEl.textContent = currentAccount;
+
+    // contract instance
+    contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+    const network = await provider.getNetwork();
+    netEl.textContent = `Network: ${network.name} (chainId=${network.chainId})`;
+
+    log("Bağlandı ✅");
+  } catch (e) {
+    console.error(e);
+    log("Bağlantı başarısız: " + (e?.message || e), true);
+  }
+}
+
+function disconnectMM() {
+  // MetaMask gerçek disconnect vermez; sadece local state temizlenir
+  provider = null; signer = null; contract = null; currentAccount = null;
+  accountEl.textContent = "Not connected";
+  netEl.textContent = "";
+  log("Disconnect (local) ✅");
+}
+
+/* =========================
+   Menu Render
+   ========================= */
+function renderMenu() {
+  const role = document.getElementById("role").value;
+  const menu = document.getElementById("menu");
+  menu.innerHTML = "";
+
+  if (!role) {
+    menu.innerHTML = `<p class="muted">Önce rol seç.</p>`;
+    return;
+  }
+
+  if (role === "admin") {
+    menu.innerHTML = `
+      <div class="card">
+        <h4>Admin – Register Roles</h4>
+        <div class="row">
+          <input id="addr" placeholder="0x... Address">
+          <button onclick="registerRole('producer')">Register Producer</button>
+          <button onclick="registerRole('transporter')">Register Transporter</button>
+          <button onclick="registerRole('distributor')">Register Distributor</button>
+          <button onclick="registerRole('retailer')">Register Retailer</button>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button onclick="checkRoles()">Check Role of Address</button>
+        </div>
+      </div>
+    `;
+  }
+
+  if (role === "producer") {
+    menu.innerHTML = `
+      <div class="card">
+        <h4>Producer – Create Batch</h4>
+        <div class="row">
+          <input id="bid" placeholder="Batch ID (e.g. 101)">
+          <input id="pname" placeholder='Product Name (e.g. "Tomatoes")'>
+          <input id="qty" placeholder="Quantity (e.g. 100)">
+          <button onclick="createBatch()">Create</button>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Ownership Transfer</h4>
+        <div class="row">
+          <input id="tbid" placeholder="Batch ID">
+          <input id="newOwner" placeholder="New Owner 0x...">
+          <button onclick="transfer()">Transfer</button>
+        </div>
+      </div>
+    `;
+  }
+
+  if (role === "transporter") {
+    menu.innerHTML = `
+      <div class="card">
+        <h4>Transporter – Add Sensor Data</h4>
+        <div class="row">
+          <input id="sbid" placeholder="Batch ID (e.g. 101)">
+          <input id="temp" placeholder="Temperature (-10..40)">
+          <input id="hum" placeholder="Humidity (0..40)">
+          <input id="loc" placeholder='Location (e.g. "Bursa")'>
+          <button onclick="addSensor()">Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Ownership Transfer</h4>
+        <div class="row">
+          <input id="tbid" placeholder="Batch ID">
+          <input id="newOwner" placeholder="New Owner 0x...">
+          <button onclick="transfer()">Transfer</button>
+        </div>
+      </div>
+    `;
+  }
+
+  if (role === "distributor") {
+    menu.innerHTML = `
+      <div class="card">
+        <h4>Distributor – Ownership Transfer</h4>
+        <div class="row">
+          <input id="tbid" placeholder="Batch ID">
+          <input id="newOwner" placeholder="New Owner 0x...">
+          <button onclick="transfer()">Transfer</button>
+        </div>
+      </div>
+    `;
+  }
+
+  if (role === "retailer") {
+    menu.innerHTML = `
+      <div class="card">
+        <h4>Retailer – Final Inspection</h4>
+        <div class="row">
+          <input id="rbid" placeholder="Batch ID">
+          <button onclick="markArrived(true)">Passed</button>
+          <button onclick="markArrived(false)">Failed</button>
+        </div>
+      </div>
+    `;
+  }
+
+  if (role === "customer") {
+    menu.innerHTML = `
+      <div class="card">
+        <h4>Customer – View History</h4>
+        <div class="row">
+          <input id="cbid" placeholder="Batch ID (e.g. 101)">
+          <button onclick="viewBasic()">getBatchBasic</button>
+          <button onclick="viewHistory()">getBatchHistory</button>
+        </div>
+      </div>
+    `;
+  }
+}
+
+/* =========================
+   Contract Calls
+   ========================= */
+
+async function waitTx(tx) {
+  log("Tx sent: " + tx.hash + "\nBekleniyor...");
+  const rcpt = await tx.wait();
+  log("✅ Mined: " + tx.hash + "\nBlock: " + rcpt.blockNumber);
+  return rcpt;
+}
+
+async function registerRole(type) {
+  try {
+    ensureConnected();
+    const addr = document.getElementById("addr").value.trim();
+    if (!addr) throw new Error("Address boş.");
+
+    let tx;
+    if (type === "producer") tx = await contract.registerProducer(addr);
+    if (type === "transporter") tx = await contract.registerTransporter(addr);
+    if (type === "distributor") tx = await contract.registerDistributor(addr);
+    if (type === "retailer") tx = await contract.registerRetailer(addr);
+
+    await waitTx(tx);
+  } catch (e) {
+    console.error(e);
+    log("Register error: " + (e?.message || e), true);
+  }
+}
+
+async function checkRoles() {
+  try {
+    ensureConnected();
+    const addr = document.getElementById("addr").value.trim();
+    if (!addr) throw new Error("Address boş.");
+
+    const p = await contract.isProducer(addr);
+    const t = await contract.isTransporter(addr);
+    const d = await contract.isDistributor(addr);
+    const r = await contract.isRetailer(addr);
+
+    log(JSON.stringify({ address: addr, isProducer: p, isTransporter: t, isDistributor: d, isRetailer: r }, null, 2));
+  } catch (e) {
+    console.error(e);
+    log("Check role error: " + (e?.message || e), true);
+  }
 }
 
 async function createBatch() {
-    await contract.createBatch(
-        bid.value,
-        pname.value,
-        qty.value
+  try {
+    ensureConnected();
+    const bid = document.getElementById("bid").value.trim();
+    const pname = document.getElementById("pname").value.trim();
+    const qty = document.getElementById("qty").value.trim();
+
+    const tx = await contract.createBatch(
+      ethers.BigNumber.from(bid),
+      pname,
+      ethers.BigNumber.from(qty)
     );
-    alert("Batch created");
+    await waitTx(tx);
+  } catch (e) {
+    console.error(e);
+    log("createBatch error: " + (e?.message || e), true);
+  }
 }
 
 async function addSensor() {
-    await contract.addSensorData(
-        sbid.value,
-        temp.value,
-        hum.value,
-        loc.value
+  try {
+    ensureConnected();
+    const sbid = document.getElementById("sbid").value.trim();
+    const temp = document.getElementById("temp").value.trim();
+    const hum = document.getElementById("hum").value.trim();
+    const loc = document.getElementById("loc").value.trim();
+
+    const tx = await contract.addSensorData(
+      ethers.BigNumber.from(sbid),
+      parseInt(temp, 10),
+      parseInt(hum, 10),
+      loc
     );
-    alert("Sensor data added");
+    await waitTx(tx);
+  } catch (e) {
+    console.error(e);
+    log("addSensorData error: " + (e?.message || e), true);
+  }
 }
 
 async function transfer() {
-    await contract.transferOwnership(
-        tbid.value,
-        newOwner.value
+  try {
+    ensureConnected();
+    const tbid = document.getElementById("tbid").value.trim();
+    const newOwner = document.getElementById("newOwner").value.trim();
+
+    const tx = await contract.transferOwnership(
+      ethers.BigNumber.from(tbid),
+      newOwner
     );
-    alert("Transferred");
+    await waitTx(tx);
+  } catch (e) {
+    console.error(e);
+    log("transferOwnership error: " + (e?.message || e), true);
+  }
 }
 
-async function arrived(pass) {
-    await contract.markAsArrived(
-        rbid.value,
-        pass
+async function markArrived(pass) {
+  try {
+    ensureConnected();
+    const rbid = document.getElementById("rbid").value.trim();
+
+    const tx = await contract.markAsArrived(
+      ethers.BigNumber.from(rbid),
+      pass
     );
-    alert("Marked");
+    await waitTx(tx);
+  } catch (e) {
+    console.error(e);
+    log("markAsArrived error: " + (e?.message || e), true);
+  }
 }
 
-async function view() {
-    const history = await contract.getBatchHistory(cbid.value);
-    document.getElementById("output").innerText =
-        JSON.stringify(history, null, 2);
+async function viewBasic() {
+  try {
+    if (!window.ethereum) throw new Error("MetaMask yok.");
+    // Customer view için de MetaMask üzerinden okuyoruz (kolay)
+    ensureConnected();
+
+    const cbid = document.getElementById("cbid").value.trim();
+    const res = await contract.getBatchBasic(ethers.BigNumber.from(cbid));
+
+    // ethers v5 return: array-like object
+    const obj = {
+      batchId: res[0].toString(),
+      productName: res[1],
+      quantity: res[2].toString(),
+      producer: res[3],
+      currentOwner: res[4],
+      createdAt: res[5].toString(),
+      arrived: res[6],
+      passedInspection: res[7],
+      inspectionTime: res[8].toString(),
+      retailer: res[9]
+    };
+
+    log(JSON.stringify(obj, null, 2));
+  } catch (e) {
+    console.error(e);
+    log("getBatchBasic error: " + (e?.message || e), true);
+  }
+}
+
+async function viewHistory() {
+  try {
+    ensureConnected();
+    const cbid = document.getElementById("cbid").value.trim();
+
+    const res = await contract.getBatchHistory(ethers.BigNumber.from(cbid));
+    // res = [sensorLogs, transfers, inspection]
+    log(JSON.stringify(res, null, 2));
+  } catch (e) {
+    console.error(e);
+    log("getBatchHistory error: " + (e?.message || e), true);
+  }
+}
+
+/* =========================
+   Event Listeners
+   ========================= */
+document.getElementById("btnConnect").addEventListener("click", connectMM);
+document.getElementById("btnDisconnect").addEventListener("click", disconnectMM);
+document.getElementById("btnShow").addEventListener("click", renderMenu);
+
+// Hesap/ağ değişince UI yenile
+if (window.ethereum) {
+  window.ethereum.on("accountsChanged", () => {
+    disconnectMM();
+    log("Account changed. Tekrar connect yap.", false);
+  });
+  window.ethereum.on("chainChanged", () => {
+    disconnectMM();
+    log("Network changed. Tekrar connect yap.", false);
+  });
 }
 </script>
-
 </body>
 </html>
