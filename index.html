@@ -633,17 +633,32 @@ const ABI = [
 ];
 
 async function connect() {
-    if (!window.ethereum) {
+    if (typeof window.ethereum === "undefined") {
         alert("MetaMask not found");
         return;
     }
-    provider = new ethers.BrowserProvider(window.ethereum);
-    signer = await provider.getSigner();
-    contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
-    const addr = await signer.getAddress();
-    document.getElementById("account").innerText = "Connected: " + addr;
+    try {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+
+        contract = new ethers.Contract(
+            CONTRACT_ADDRESS,
+            ABI,
+            signer
+        );
+
+        const addr = await signer.getAddress();
+        document.getElementById("account").innerText =
+            "Connected: " + addr;
+
+    } catch (err) {
+        console.error(err);
+        alert("Connection failed");
+    }
 }
+
 
 function showMenu() {
     const role = document.getElementById("role").value;
