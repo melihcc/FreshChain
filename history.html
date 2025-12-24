@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FreshChain – Public Verification</title>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+
+<style>
+body{font-family:Arial;margin:28px}
+.card{border:1px solid #ddd;border-radius:10px;padding:16px;margin-top:16px}
+pre{background:#f7f7f7;padding:12px;border-radius:8px;white-space:pre-wrap}
+.muted{color:#666;font-size:13px}
+.ok{color:#0a7a0a;font-weight:600}
+.err{color:#b00020;font-weight:600}
+</style>
+</head>
+
+<body>
+
+<h2>FreshChain – Public Product Verification</h2>
+<p class="muted">
+This page allows public verification of product history without requiring MetaMask.
+</p>
+
+<div class="card">
+  <h3>Batch Information</h3>
+  <pre id="out">Loading...</pre>
+</div>
+
+<script>
+/* ===== CONFIG ===== */
+const CONTRACT_ADDRESS = "0xf4F096e21D38709683bdFe861BC8A198582021bd";
+
+const ABI = [
+  {
+    "inputs":[{"internalType":"uint256","name":"batchId","type":"uint256"}],
+    "name":"getBatchBasic",
+    "outputs":[
+      {"internalType":"uint256","name":"id","type":"uint256"},
+      {"internalType":"string","name":"productName","type":"string"},
+      {"internalType":"uint256","name":"quantity","type":"uint256"},
+      {"internalType":"address","name":"producer","type":"address"},
+      {"internalType":"address","name":"currentOwner","type":"address"},
+      {"internalType":"uint256","name":"createdAt","type":"uint256"},
+      {"internalType":"bool","name":"arrived","type":"bool"},
+      {"internalType":"bool","name":"passedInspection","type":"bool"},
+      {"internalType":"uint256","name":"inspectionTime","type":"uint256"},
+      {"internalType":"address","name":"retailer","type":"address"}
+    ],
+    "stateMutability":"view",
+    "type":"function"
+  },
+  {
+    "inputs":[{"internalType":"uint256","name":"batchId","type":"uint256"}],
+    "name":"getBatchHistory",
+    "outputs":[
+      {
+        "components":[
+          {"internalType":"int256","name":"temperature","type":"int256"},
+          {"internalType":"int256","name":"humidity","type":"int256"},
+          {"internalType":"string","name":"location","type":"string"},
+          {"internalType":"uint256","name":"timestamp","type":"uint256"},
+          {"internalType":"address","name":"recorder","type":"address"}
+        ],
+        "internalType":"struct FreshChain.SensorData[]",
+        "name":"sensorLogs",
+        "type":"tuple[]"
+      },
+      {
+        "components":[
+          {"internalType":"address","name":"from","type":"address"},
+          {"internalType":"address","name":"to","type":"address"},
+          {"internalType":"uint256","name":"timestamp","type":"uint256"},
+          {"internalType":"address","name":"caller","type":"address"}
+        ],
+        "internalType":"struct FreshChain.TransferRecord[]",
+        "name":"transfers",
+        "type":"tuple[]"
+      },
+      {
+        "components":[
+          {"internalType":"bool","name":"arrived","type":"bool"},
+          {"internalType":"bool","name":"passedInspection","type":"bool"},
+          {"internalType":"uint256","name":"timestamp","type":"uint256"},
+          {"internalType":"address","name":"retailer","type":"address"}
+        ],
+        "internalType":"struct FreshChain.Inspection",
+        "name":"inspection",
+        "type":"tuple"
+      }
+    ],
+    "stateMutability":"view",
+    "type":"function"
+  }
+];
+
+const out = document.getElementById("out");
+
+function getBatchId(){
+  const p = new URLSearchParams(window.location.search);
+  return p.get("batchId");
+}
+
+async function loadData(){
+  const batchId = getBatchId();
+  if(!batchId){
+    out.textContent = "No batchId provided in URL.";
+    return;
+  }
+
+  try{
+    // ✅ STABİL RPC
+    const provider = new ethers.providers.JsonRpcProvider(
+      "https://ethereum-sepolia.publicnode.com"
+    );
+
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+
+    const basic = await contract.getBatchBasic(batchId);
+    const history = await contract.getBatchHistory(batchId);
+
+    const result = {
+      batchId: basic[0].toString(),
+      productName: basic[1],
+      quantity: basic[2].toString(),
+      producer: basic[3],
+      currentOwner: basic[4],
+      arrived: basic[6],
+      passedInspection: basic[7],
+      sensorLogs: history[0],
+      transfers: history[1],
+      inspection: history[2]
+    };
+
+    out.textContent = JSON.stringify(result, null, 2);
+
+  }catch(e){
+    out.textContent = "Error loading data: " + e.message;
+  }
+}
+
+loadData();
+</script>
+
+</body>
+</html>
